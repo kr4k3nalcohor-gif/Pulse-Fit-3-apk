@@ -1,0 +1,55 @@
+name: Compilar APK Android Debug (PulseFit)
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Android Debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Create debug keystore
+        run: |
+          keytool -genkey -v -keystore android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Build Debug APK with Gradle
+        working-directory: ./android
+        run: |
+          chmod +x gradlew || true
+          gradle assembleDebug --stacktrace || (gradle wrapper && ./gradlew assembleDebug)
+
+      - name: Upload Debug APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PulseFit-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          retention-days: 14
+
+      - name: Create Release with APK (on tag or manual dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: android/app/build/outputs/apk/debug/*.apk
+          tag_name: v1.0.0-apk
+          name: "PulseFit Metrónomo APK v1.0.0"
+          body: "APK instalable directo para Android con soporte nativo de vibración háptica y Samsung Galaxy Fit 3."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
